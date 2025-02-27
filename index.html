@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Changa Po 3D Game</title>
+    <script src="https://unpkg.com/three@0.137.5/build/three.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <style>
+        body { margin: 0; overflow: hidden; touch-action: none; }
+        #gameContainer { position: relative; width: 100vw; height: 100vh; }
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 24px;
+            z-index: 100;
+        }
+        .controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 20px;
+            z-index: 100;
+        }
+        .control-btn {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.3);
+            border: 2px solid white;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            touch-action: manipulation;
+        }
+        #levelComplete {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+            display: none;
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="hud">
+            Level: <span id="levelDisplay">1</span>/50
+            <br>
+            Score: <span id="scoreDisplay">0</span>
+        </div>
+        <div class="controls">
+            <button class="control-btn" id="leftBtn"><i class="bi bi-arrow-left"></i></button>
+            <button class="control-btn" id="jumpBtn"><i class="bi bi-arrow-up"></i></button>
+            <button class="control-btn" id="rightBtn"><i class="bi bi-arrow-right"></i></button>
+        </div>
+        <div id="levelComplete">
+            <h2 class="text-2xl mb-4">Level Complete!</h2>
+            <button id="nextLevel" class="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                Next Level
+            </button>
+        </div>
+    </div>
+
+    <script>
+        let scene, camera, renderer, player;
+        let currentLevel = 1;
+        let score = 0;
+        let isJumping = false;
+        let playerVelocity = new THREE.Vector3();
+
+        const init = () => {
+            // Scene setup
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.getElementById('gameContainer').appendChild(renderer.domElement);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(0, 10, 5);
+            scene.add(directionalLight);
+
+            // Player
+            const geometry = new THREE.BoxGeometry(1, 1, 1);
+            const material = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
+            player = new THREE.Mesh(geometry, material);
+            scene.add(player);
+
+            camera.position.z = 10;
+            camera.position.y = 5;
+            camera.lookAt(player.position);
+
+            createLevel(currentLevel);
+        };
+
+        const createLevel = (level) => {
+            // Clear previous level
+            while(scene.children.length > 0){ 
+                scene.remove(scene.children[0]); 
+            }
+            scene.add(player);
+
+            // Create platforms
+            const platformGeometry = new THREE.BoxGeometry(2, 0.5, 2);
+            const platformMaterial = new THREE.MeshPhongMaterial({ color: 0x808080 });
+
+            for(let i = 0; i < 5 + level; i++) {
+                const platform = new THREE.Mesh(platformGeometry, platformMaterial);
+                platform.position.set(
+                    Math.random() * 20 - 10,
+                    Math.random() * 10 - 5,
+                    0
+                );
+                scene.add(platform);
+            }
+
+            // Reset player position
+            player.position.set(0, 5, 0);
+            playerVelocity.set(0, 0, 0);
+        };
+
+        const animate = () => {
+            requestAnimationFrame(animate);
+
+            // Apply gravity
+            if(!isJumping) {
+                playerVelocity.y -= 0.05;
+            }
+
+            // Update player position
+            player.position.add(playerVelocity);
+
+            // Basic collision detection with bottom of screen
+            if(player.position.y < -10) {
+                createLevel(currentLevel);
+            }
+
+            // Camera follows player
+            camera.position.x = player.position.x;
+            camera.position.y = player.position.y + 5;
+            camera.lookAt(player.position);
+
+            renderer.render(scene, camera);
+        };
+
+        // Control handlers
+        document.getElementById('leftBtn').addEventListener('pointerdown', () => {
+            playerVelocity.x = -0.2;
+        });
+
+        document.getElementById('rightBtn').addEventListener('pointerdown', () => {
+            playerVelocity.x = 0.2;
+        });
+
+        document.getElementById('jumpBtn').addEventListener('pointerdown', () => {
+            if(!isJumping) {
+                playerVelocity.y = 0.5;
+                isJumping = true;
+                setTimeout(() => { isJumping = false; }, 500);
+            }
+        });
+
+        ['leftBtn', 'rightBtn'].forEach(btn => {
+            document.getElementById(btn).addEventListener('pointerup', () => {
+                playerVelocity.x = 0;
+            });
+        });
+
+        // Level completion
+        const completeLevel = () => {
+            if(currentLevel < 50) {
+                document.getElementById('levelComplete').style.display = 'block';
+                currentLevel++;
+                score += 100;
+                document.getElementById('levelDisplay').textContent = currentLevel;
+                document.getElementById('scoreDisplay').textContent = score;
+            }
+        };
+
+        document.getElementById('nextLevel').addEventListener('click', () => {
+            document.getElementById('levelComplete').style.display = 'none';
+            createLevel(currentLevel);
+        });
+
+        // Window resize handler
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Initialize game
+        init();
+        animate();
+    </script>
+<script>document.body.addEventListener('wheel', e => { if (!e.ctrlKey) return; e.preventDefault(); return }, { passive: false })</script>
+	</body>
+</html>
